@@ -109,10 +109,25 @@
       return res.json();
     }
 
+    function ageBucket(age) {
+      if (age <  20) return '1-19';
+      if (age <  30) return '20-29';
+      if (age <  40) return '30-39';
+      if (age <  50) return '40-49';
+      if (age <  60) return '50-59';
+      if (age <  70) return '60-69';
+      return '70+';
+    }
+
+    function deriveDivision(gender, age) {
+      const prefix = gender === 'Male' ? 'M' : gender === 'Female' ? 'F' : 'NB';
+      return `${prefix}${ageBucket(age)}`;
+    }
+
     function buildStats(results) {
       const groups = {};
       for (const r of results) {
-        const div = r.division || 'Unknown';
+        const div = deriveDivision(r.genderSexId, r.age);
         if (!groups[div]) groups[div] = { division: div, gender: r.genderSexId, times: [] };
         const t = parseTime(r.chipTime);
         if (t !== null) groups[div].times.push(t);
