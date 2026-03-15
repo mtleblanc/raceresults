@@ -32,6 +32,7 @@
     #grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); padding: 1.25rem 1.5rem; }
     .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); overflow: hidden; }
     .card-header { background: #1e3a5f; color: #fff; padding: 0.6rem 1rem; display: flex; justify-content: space-between; align-items: baseline; }
+    .card-header--summary { background: #2d6a4f; }
     .card-header h2 { font-size: 0.95rem; }
     .card-header .count { font-size: 0.78rem; opacity: 0.8; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -192,22 +193,42 @@
       const t = parseTime(r.chipTime);
       if (t != null) groups[div].times.push(t);
     }
-    for (const g of Object.values(groups)) {
+    const summaryTimes = { Overall: [], Male: [], Female: [], 'Non-binary': [] };
+
+    for (const r of results) {
+      const t = parseTime(r.chipTime);
+      if (t == null) continue;
+      summaryTimes.Overall.push(t);
+      const g = r.genderSexId;
+      if (g in summaryTimes) summaryTimes[g].push(t);
+    }
+
+    function computeStats(g) {
       g.times.sort((a, b) => a - b);
-      g.count = g.times.length;
+      g.count   = g.times.length;
       g.fastest = g.times[0] ?? null;
-      g.stats = {};
+      g.stats   = {};
       for (const p of PERCENTILES) {
-        // p-th runner percentile = (100-p)-th percentile of time values
         g.stats[p] = percentile(g.times, 100 - p);
       }
     }
-    return groups;
+
+    for (const g of Object.values(groups)) computeStats(g);
+
+    const summaries = {};
+    for (const [label, times] of Object.entries(summaryTimes)) {
+      if (!times.length) continue;
+      const s = { division: label, gender: label, times };
+      computeStats(s);
+      summaries[label] = s;
+    }
+
+    return { groups, summaries };
   }
 
   // ── rendering ─────────────────────────────────────────────────────────────
 
-  function renderCard(group, distanceKm) {
+  function renderCard(group, distanceKm, summary = false) {
     const displayOrder = [...PERCENTILES].reverse(); // 90 → 10
     const rows = [
       { label: 'Fastest', time: group.fastest, cls: 'row-fastest' },
@@ -225,9 +246,10 @@
         <td class="pace">${r.time ? formatPace(r.time, distanceKm) : '—'}</td>
       </tr>`).join('');
 
+    const headerClass = summary ? 'card-header card-header--summary' : 'card-header';
     return `
       <div class="card">
-        <div class="card-header">
+        <div class="${headerClass}">
           <h2>${group.division}</h2>
           <span class="count">${group.count} finishers</span>
         </div>
@@ -238,22 +260,34 @@
       </div>`;
   }
 
-  function renderGrid(groups, distanceKm) {
+  function renderGrid({ groups, summaries }, distanceKm) {
     const gender = document.getElementById('genderFilter').value;
     const sortBy = document.getElementById('sortFilter').value;
 
+    // Summary cards: overall + gender breakdowns, filtered to match gender selector
+    const summaryOrder = gender === 'all'
+      ? ['Overall', 'Male', 'Female', 'Non-binary']
+      : [gender];
+    const summaryCards = summaryOrder
+      .filter(k => summaries[k])
+      .map(k => renderCard(summaries[k], distanceKm, true))
+      .join('');
+
+    // Age group cards
     let list = Object.values(groups);
     if (gender !== 'all') {
       const target = gender === 'Non-binary' ? 'NB' : gender === 'Male' ? 'M' : 'F';
       list = list.filter(g => g.division.startsWith(target));
     }
 
-    if (sortBy === 'count')  list.sort((a, b) => b.count - a.count);
+    if (sortBy === 'count')       list.sort((a, b) => b.count - a.count);
     else if (sortBy === 'median') list.sort((a, b) => (a.stats[50] ?? 9999) - (b.stats[50] ?? 9999));
-    else list.sort((a, b) => a.division.localeCompare(b.division));
+    else                          list.sort((a, b) => a.division.localeCompare(b.division));
 
-    document.getElementById('grid').innerHTML = list.map(g => renderCard(g, distanceKm)).join('');
-    document.getElementById('empty').style.display = list.length ? 'none' : 'block';
+    const ageCards = list.map(g => renderCard(g, distanceKm)).join('');
+
+    document.getElementById('grid').innerHTML = summaryCards + ageCards;
+    document.getElementById('empty').style.display = (summaryCards || ageCards) ? 'none' : 'block';
   }
 
   // ── event list ─────────────────────────────────────────────────────────────
@@ -288,7 +322,7 @@
     const data = await res.json();
     currentGroups = buildStats(data);
 
-    setStatus(`${event.name} — ${data.length} results across ${Object.keys(currentGroups).length} age groups.`);
+    setStatus(`${event.name} — ${data.length} results across ${Object.keys(currentGroups.groups).length} age groups.`);
     renderGrid(currentGroups, event.distanceKm);
   }
 
