@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Race Results – Age Group Percentiles</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; padding: 2rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    #status { margin-bottom: 1rem; font-size: 0.9rem; color: #555; }
+    .progress-bar-wrap { background: #ddd; border-radius: 4px; height: 8px; margin-bottom: 1.5rem; max-width: 400px; }
+    .progress-bar { background: #3b82f6; height: 8px; border-radius: 4px; transition: width 0.2s; }
+
+    .filter-row { display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .filter-row label { font-size: 0.85rem; font-weight: 600; }
+    .filter-row select { padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; }
+    .filter-row input[type=checkbox] { margin-right: 0.25rem; }
+
+    .grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
+
+    .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); overflow: hidden; }
+    .card-header { background: #1e3a5f; color: #fff; padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: baseline; }
+    .card-header h2 { font-size: 1rem; }
+    .card-header .count { font-size: 0.8rem; opacity: 0.8; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { background: #f0f4f8; text-align: left; padding: 0.4rem 0.75rem; font-size: 0.75rem; color: #555; border-bottom: 1px solid #ddd; }
+    td { padding: 0.35rem 0.75rem; border-bottom: 1px solid #f0f0f0; font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom: none; }
+    td.label { color: #555; font-size: 0.8rem; }
+    td.time { font-weight: 600; font-family: monospace; font-size: 0.9rem; }
+    td.pace { color: #666; font-family: monospace; font-size: 0.85rem; }
+    .row-fastest td { background: #ecfdf5; }
+    .row-fastest td.label { color: #16a34a; }
+    .row-median td { background: #eff6ff; }
+
+    .error { color: #dc2626; padding: 1rem; background: #fee2e2; border-radius: 6px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Race Results – Age Group Percentiles</h1>
+  <p class="subtitle">Chip time percentiles by division &mdash; lower percentile = faster</p>
+
+  <div id="status">Loading results…</div>
+  <div class="progress-bar-wrap"><div class="progress-bar" id="progress" style="width:0%"></div></div>
+
+  <div class="filter-row hidden" id="filters">
+    <label>Gender:
+      <select id="genderFilter">
+        <option value="all">All</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+      </select>
+    </label>
+    <label>Sort groups by:
+      <select id="sortFilter">
+        <option value="name">Division name</option>
+        <option value="count">Group size</option>
+        <option value="median">Median time</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    const BASE_URL = 'https://results.raceroster.com/v2/api/result-events/97210/sub-events/253764/results';
+    const LIMIT = 50;
+    const PERCENTILES = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+
+    function parseTime(str) {
+      if (!str) return null;
+      const parts = str.trim().split(':').map(Number);
+      if (parts.some(isNaN)) return null;
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      return null;
+    }
+
+    function formatTime(secs) {
+      if (secs === null || secs === undefined) return '—';
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = Math.round(secs % 60);
+      if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      return `${m}:${String(s).padStart(2,'0')}`;
+    }
+
+    function formatPace(secs, distanceKm = 10) {
+      // pace per km
+      const pacePerKm = secs / distanceKm;
+      const pm = Math.floor(pacePerKm / 60);
+      const ps = Math.round(pacePerKm % 60);
+      return `${pm}:${String(ps).padStart(2,'0')}/km`;
+    }
+
+    function percentile(sorted, p) {
+      if (!sorted.length) return null;
+      if (p === 0) return sorted[0];
+      const idx = (p / 100) * (sorted.length - 1);
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+    }
+
+    async function fetchPage(start) {
+      const url = `${BASE_URL}?filter_search=&start=${start}&limit=${LIMIT}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status} at start=${start}`);
+      return res.json();
+    }
+
+    async function fetchAll() {
+      const first = await fetchPage(0);
+      const total = first.meta.filteredResults;
+      const allData = [...first.data];
+      updateProgress(allData.length, total);
+
+      const pages = [];
+      for (let start = LIMIT; start < total; start += LIMIT) {
+        pages.push(start);
+      }
+
+      // fetch remaining pages with modest concurrency
+      const CONCURRENCY = 4;
+      for (let i = 0; i < pages.length; i += CONCURRENCY) {
+        const batch = pages.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(batch.map(fetchPage));
+        for (const r of results) allData.push(...r.data);
+        updateProgress(allData.length, total);
+      }
+
+      return allData;
+    }
+
+    function updateProgress(loaded, total) {
+      document.getElementById('status').textContent = `Loaded ${loaded} / ${total} results…`;
+      document.getElementById('progress').style.width = `${Math.round(loaded / total * 100)}%`;
+    }
+
+    function buildStats(results) {
+      const groups = {};
+      for (const r of results) {
+        const div = r.division || 'Unknown';
+        if (!groups[div]) groups[div] = { division: div, gender: r.genderSexId, times: [] };
+        const t = parseTime(r.chipTime);
+        if (t !== null) groups[div].times.push(t);
+      }
+      for (const g of Object.values(groups)) {
+        g.times.sort((a, b) => a - b);
+        g.count = g.times.length;
+        g.stats = {};
+        g.stats.fastest = g.times[0] ?? null;
+        for (const p of PERCENTILES) {
+          // p-th runner percentile = (100-p)-th percentile of time values (lower time = faster)
+          g.stats[p] = percentile(g.times, 100 - p);
+        }
+      }
+      return groups;
+    }
+
+    function renderCard(group) {
+      // PERCENTILES are runner percentiles (90th = faster than 90% of field),
+      // displayed fastest-first (90th down to 10th).
+      const displayOrder = [...PERCENTILES].reverse(); // 90, 80, ... 10
+      const rows = [
+        { label: 'Fastest (100th)', time: group.stats.fastest, cls: 'row-fastest' },
+        ...displayOrder.map(p => ({
+          label: `${p}th percentile`,
+          time: group.stats[p],
+          cls: p === 50 ? 'row-median' : '',
+        })),
+      ];
+
+      const trs = rows.map(r => `
+        <tr class="${r.cls}">
+          <td class="label">${r.label}</td>
+          <td class="time">${formatTime(r.time)}</td>
+          <td class="pace">${r.time ? formatPace(r.time) : '—'}</td>
+        </tr>`).join('');
+
+      return `
+        <div class="card" data-gender="${group.gender}" data-division="${group.division}" data-count="${group.count}" data-median="${group.stats[50] ?? 9999}">
+          <div class="card-header">
+            <h2>${group.division}</h2>
+            <span class="count">${group.count} finishers</span>
+          </div>
+          <table>
+            <thead><tr><th>Percentile</th><th>Time</th><th>Pace</th></tr></thead>
+            <tbody>${trs}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function renderGrid(groups) {
+      const gender = document.getElementById('genderFilter').value;
+      const sortBy = document.getElementById('sortFilter').value;
+
+      let list = Object.values(groups);
+      if (gender !== 'all') list = list.filter(g => g.gender === gender);
+
+      if (sortBy === 'count') list.sort((a, b) => b.count - a.count);
+      else if (sortBy === 'median') list.sort((a, b) => (a.stats[50] ?? 9999) - (b.stats[50] ?? 9999));
+      else list.sort((a, b) => a.division.localeCompare(b.division));
+
+      document.getElementById('grid').innerHTML = list.map(renderCard).join('');
+    }
+
+    async function main() {
+      try {
+        const data = await fetchAll();
+        const groups = buildStats(data);
+
+        document.getElementById('status').textContent = `${data.length} results loaded across ${Object.keys(groups).length} age groups.`;
+        document.getElementById('progress').style.width = '100%';
+        document.getElementById('filters').classList.remove('hidden');
+
+        renderGrid(groups);
+
+        document.getElementById('genderFilter').addEventListener('change', () => renderGrid(groups));
+        document.getElementById('sortFilter').addEventListener('change', () => renderGrid(groups));
+      } catch (err) {
+        document.getElementById('status').innerHTML = `<span class="error">Error: ${err.message}</span>`;
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
