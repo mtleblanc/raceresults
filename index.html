@@ -6,212 +6,393 @@
   <title>Race Results – Age Group Percentiles</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; padding: 2rem; }
-    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-    .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
-    #status { margin-bottom: 1rem; font-size: 0.9rem; color: #555; }
-    .progress-bar-wrap { background: #ddd; border-radius: 4px; height: 8px; margin-bottom: 1.5rem; max-width: 400px; }
-    .progress-bar { background: #3b82f6; height: 8px; border-radius: 4px; transition: width 0.2s; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; }
 
-    .filter-row { display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
-    .filter-row label { font-size: 0.85rem; font-weight: 600; }
-    .filter-row select { padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; }
-    .filter-row input[type=checkbox] { margin-right: 0.25rem; }
+    /* ── header ── */
+    header { background: #1e3a5f; color: #fff; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    header h1 { font-size: 1.1rem; white-space: nowrap; }
+    header select { padding: 0.35rem 0.5rem; border-radius: 4px; border: none; font-size: 0.9rem; flex: 1; min-width: 200px; max-width: 420px; }
+    header button { padding: 0.35rem 0.85rem; border-radius: 4px; border: none; font-size: 0.85rem; cursor: pointer; }
+    #addBtn    { background: #3b82f6; color: #fff; }
+    #deleteBtn { background: #dc2626; color: #fff; }
+    #deleteBtn:disabled { background: #888; cursor: default; }
 
-    .grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
+    /* ── status bar ── */
+    #statusBar { padding: 0.6rem 1.5rem; background: #e8f0fe; font-size: 0.85rem; color: #333; min-height: 2rem; display: flex; align-items: center; gap: 0.75rem; }
+    .progress-wrap { flex: 1; max-width: 300px; background: #ccc; border-radius: 4px; height: 6px; }
+    .progress-bar  { background: #3b82f6; height: 6px; border-radius: 4px; width: 0; transition: width 0.2s; }
 
+    /* ── filters ── */
+    #filterBar { display: none; padding: 0.75rem 1.5rem; background: #fff; border-bottom: 1px solid #ddd; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+    #filterBar label { font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 0.35rem; }
+    #filterBar select { padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; }
+    .event-meta { margin-left: auto; font-size: 0.8rem; color: #666; }
+
+    /* ── grid ── */
+    #grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); padding: 1.25rem 1.5rem; }
     .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); overflow: hidden; }
-    .card-header { background: #1e3a5f; color: #fff; padding: 0.75rem 1rem; display: flex; justify-content: space-between; align-items: baseline; }
-    .card-header h2 { font-size: 1rem; }
-    .card-header .count { font-size: 0.8rem; opacity: 0.8; }
+    .card-header { background: #1e3a5f; color: #fff; padding: 0.6rem 1rem; display: flex; justify-content: space-between; align-items: baseline; }
+    .card-header h2 { font-size: 0.95rem; }
+    .card-header .count { font-size: 0.78rem; opacity: 0.8; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th { background: #f0f4f8; text-align: left; padding: 0.4rem 0.75rem; font-size: 0.75rem; color: #555; border-bottom: 1px solid #ddd; }
-    td { padding: 0.35rem 0.75rem; border-bottom: 1px solid #f0f0f0; font-variant-numeric: tabular-nums; }
+    th { background: #f0f4f8; text-align: left; padding: 0.35rem 0.75rem; font-size: 0.72rem; color: #555; border-bottom: 1px solid #ddd; }
+    td { padding: 0.3rem 0.75rem; border-bottom: 1px solid #f0f0f0; font-variant-numeric: tabular-nums; }
     tr:last-child td { border-bottom: none; }
     td.label { color: #555; font-size: 0.8rem; }
-    td.time { font-weight: 600; font-family: monospace; font-size: 0.9rem; }
-    td.pace { color: #666; font-family: monospace; font-size: 0.85rem; }
+    td.time  { font-weight: 600; font-family: monospace; font-size: 0.88rem; }
+    td.pace  { color: #666; font-family: monospace; font-size: 0.82rem; }
     .row-fastest td { background: #ecfdf5; }
-    .row-fastest td.label { color: #16a34a; }
+    .row-fastest td.label { color: #16a34a; font-weight: 600; }
     .row-median td { background: #eff6ff; }
 
-    .error { color: #dc2626; padding: 1rem; background: #fee2e2; border-radius: 6px; }
-    .hidden { display: none; }
+    /* ── modal ── */
+    .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; }
+    .overlay.open { display: flex; }
+    .modal { background: #fff; border-radius: 8px; padding: 1.5rem; width: 100%; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+    .modal h2 { margin-bottom: 1rem; font-size: 1rem; }
+    .field { margin-bottom: 0.85rem; display: flex; flex-direction: column; gap: 0.3rem; }
+    .field label { font-size: 0.82rem; font-weight: 600; color: #444; }
+    .field input { padding: 0.4rem 0.6rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    .field .hint  { font-size: 0.75rem; color: #888; }
+    .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.25rem; }
+    .modal-actions button { padding: 0.45rem 1rem; border-radius: 4px; border: none; font-size: 0.875rem; cursor: pointer; }
+    #cancelBtn { background: #e5e7eb; color: #333; }
+    #submitBtn { background: #3b82f6; color: #fff; }
+    #submitBtn:disabled { background: #93c5fd; cursor: default; }
+    .modal-error { color: #dc2626; font-size: 0.82rem; margin-top: 0.5rem; }
+
+    #empty { display: none; padding: 3rem 1.5rem; text-align: center; color: #888; font-size: 0.95rem; }
   </style>
 </head>
 <body>
-  <h1>Race Results – Age Group Percentiles</h1>
-  <p class="subtitle">Chip time percentiles by division &mdash; lower percentile = faster</p>
 
-  <div id="status">Loading results…</div>
-  <div class="progress-bar-wrap"><div class="progress-bar" id="progress" style="width:0%"></div></div>
+<header>
+  <h1>Race Percentiles</h1>
+  <select id="eventSelect"><option value="">— select an event —</option></select>
+  <button id="addBtn">+ Add Event</button>
+  <button id="deleteBtn" disabled>Delete</button>
+</header>
 
-  <div class="filter-row hidden" id="filters">
-    <label>Gender:
-      <select id="genderFilter">
-        <option value="all">All</option>
-        <option value="Male">Male</option>
-        <option value="Female">Female</option>
-      </select>
-    </label>
-    <label>Sort groups by:
-      <select id="sortFilter">
-        <option value="name">Division name</option>
-        <option value="count">Group size</option>
-        <option value="median">Median time</option>
-      </select>
-    </label>
+<div id="statusBar"><span id="statusMsg">No event selected.</span></div>
+
+<div id="filterBar">
+  <label>Gender:
+    <select id="genderFilter">
+      <option value="all">All</option>
+      <option value="Male">Male</option>
+      <option value="Female">Female</option>
+      <option value="Non-binary">Non-binary</option>
+    </select>
+  </label>
+  <label>Sort by:
+    <select id="sortFilter">
+      <option value="name">Division name</option>
+      <option value="count">Group size</option>
+      <option value="median">Median time</option>
+    </select>
+  </label>
+  <span class="event-meta" id="eventMeta"></span>
+</div>
+
+<div id="empty">Select an event above, or add one with "+ Add Event".</div>
+<div id="grid"></div>
+
+<!-- Add Event Modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2>Add Race Event</h2>
+    <div class="field">
+      <label>Results URL <em style="font-weight:400;color:#888">(or enter IDs below)</em></label>
+      <input id="fUrl" type="text" placeholder="https://results.raceroster.com/v2/api/result-events/…">
+      <span class="hint">Paste the RaceRoster API results URL, or fill in the IDs manually.</span>
+    </div>
+    <div style="display:flex;gap:0.75rem">
+      <div class="field" style="flex:1">
+        <label>Event ID</label>
+        <input id="fEventId" type="text" placeholder="97210">
+      </div>
+      <div class="field" style="flex:1">
+        <label>Sub-event ID</label>
+        <input id="fSubEventId" type="text" placeholder="253764">
+      </div>
+    </div>
+    <div class="field">
+      <label>Event name</label>
+      <input id="fName" type="text" placeholder="Sporting Life 10K 2024">
+    </div>
+    <div class="field">
+      <label>Distance (km)</label>
+      <input id="fDistance" type="number" min="0.1" step="0.1" placeholder="10">
+    </div>
+    <div class="modal-error" id="modalError"></div>
+    <div class="modal-actions">
+      <button id="cancelBtn">Cancel</button>
+      <button id="submitBtn">Fetch &amp; Save</button>
+    </div>
   </div>
+</div>
 
-  <div class="grid" id="grid"></div>
+<script>
+  // ── stats helpers ──────────────────────────────────────────────────────────
 
-  <script>
-    const PERCENTILES = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+  const PERCENTILES = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 
-    function parseTime(str) {
-      if (!str) return null;
-      const parts = str.trim().split(':').map(Number);
-      if (parts.some(isNaN)) return null;
-      if (parts.length === 2) return parts[0] * 60 + parts[1];
-      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-      return null;
+  function parseTime(str) {
+    if (!str) return null;
+    const parts = str.trim().split(':').map(Number);
+    if (parts.some(isNaN)) return null;
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return null;
+  }
+
+  function formatTime(secs) {
+    if (secs == null) return '—';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.round(secs % 60);
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
+
+  function formatPace(secs, distanceKm) {
+    const p = secs / distanceKm;
+    return `${Math.floor(p/60)}:${String(Math.round(p%60)).padStart(2,'0')}/km`;
+  }
+
+  function percentile(sorted, p) {
+    if (!sorted.length) return null;
+    if (p === 0) return sorted[0];
+    const idx = (p / 100) * (sorted.length - 1);
+    const lo  = Math.floor(idx), hi = Math.ceil(idx);
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+  }
+
+  function ageBucket(age) {
+    if (age <  20) return '1-19';
+    if (age <  30) return '20-29';
+    if (age <  40) return '30-39';
+    if (age <  50) return '40-49';
+    if (age <  60) return '50-59';
+    if (age <  70) return '60-69';
+    return '70+';
+  }
+
+  function deriveDivision(gender, age) {
+    const prefix = gender === 'Male' ? 'M' : gender === 'Female' ? 'F' : 'NB';
+    return `${prefix}${ageBucket(age)}`;
+  }
+
+  function buildStats(results) {
+    const groups = {};
+    for (const r of results) {
+      const div = deriveDivision(r.genderSexId, r.age);
+      if (!groups[div]) groups[div] = { division: div, gender: r.genderSexId, times: [] };
+      const t = parseTime(r.chipTime);
+      if (t != null) groups[div].times.push(t);
     }
-
-    function formatTime(secs) {
-      if (secs === null || secs === undefined) return '—';
-      const h = Math.floor(secs / 3600);
-      const m = Math.floor((secs % 3600) / 60);
-      const s = Math.round(secs % 60);
-      if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-      return `${m}:${String(s).padStart(2,'0')}`;
-    }
-
-    function formatPace(secs, distanceKm = 10) {
-      // pace per km
-      const pacePerKm = secs / distanceKm;
-      const pm = Math.floor(pacePerKm / 60);
-      const ps = Math.round(pacePerKm % 60);
-      return `${pm}:${String(ps).padStart(2,'0')}/km`;
-    }
-
-    function percentile(sorted, p) {
-      if (!sorted.length) return null;
-      if (p === 0) return sorted[0];
-      const idx = (p / 100) * (sorted.length - 1);
-      const lo = Math.floor(idx);
-      const hi = Math.ceil(idx);
-      return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-    }
-
-    async function fetchAll() {
-      const res = await fetch('results.json');
-      if (!res.ok) throw new Error(`Could not load results.json (HTTP ${res.status})`);
-      return res.json();
-    }
-
-    function ageBucket(age) {
-      if (age <  20) return '1-19';
-      if (age <  30) return '20-29';
-      if (age <  40) return '30-39';
-      if (age <  50) return '40-49';
-      if (age <  60) return '50-59';
-      if (age <  70) return '60-69';
-      return '70+';
-    }
-
-    function deriveDivision(gender, age) {
-      const prefix = gender === 'Male' ? 'M' : gender === 'Female' ? 'F' : 'NB';
-      return `${prefix}${ageBucket(age)}`;
-    }
-
-    function buildStats(results) {
-      const groups = {};
-      for (const r of results) {
-        const div = deriveDivision(r.genderSexId, r.age);
-        if (!groups[div]) groups[div] = { division: div, gender: r.genderSexId, times: [] };
-        const t = parseTime(r.chipTime);
-        if (t !== null) groups[div].times.push(t);
-      }
-      for (const g of Object.values(groups)) {
-        g.times.sort((a, b) => a - b);
-        g.count = g.times.length;
-        g.stats = {};
-        g.stats.fastest = g.times[0] ?? null;
-        for (const p of PERCENTILES) {
-          // p-th runner percentile = (100-p)-th percentile of time values (lower time = faster)
-          g.stats[p] = percentile(g.times, 100 - p);
-        }
-      }
-      return groups;
-    }
-
-    function renderCard(group) {
-      // PERCENTILES are runner percentiles (90th = faster than 90% of field),
-      // displayed fastest-first (90th down to 10th).
-      const displayOrder = [...PERCENTILES].reverse(); // 90, 80, ... 10
-      const rows = [
-        { label: 'Fastest (100th)', time: group.stats.fastest, cls: 'row-fastest' },
-        ...displayOrder.map(p => ({
-          label: `${p}th percentile`,
-          time: group.stats[p],
-          cls: p === 50 ? 'row-median' : '',
-        })),
-      ];
-
-      const trs = rows.map(r => `
-        <tr class="${r.cls}">
-          <td class="label">${r.label}</td>
-          <td class="time">${formatTime(r.time)}</td>
-          <td class="pace">${r.time ? formatPace(r.time) : '—'}</td>
-        </tr>`).join('');
-
-      return `
-        <div class="card" data-gender="${group.gender}" data-division="${group.division}" data-count="${group.count}" data-median="${group.stats[50] ?? 9999}">
-          <div class="card-header">
-            <h2>${group.division}</h2>
-            <span class="count">${group.count} finishers</span>
-          </div>
-          <table>
-            <thead><tr><th>Percentile</th><th>Time</th><th>Pace</th></tr></thead>
-            <tbody>${trs}</tbody>
-          </table>
-        </div>`;
-    }
-
-    function renderGrid(groups) {
-      const gender = document.getElementById('genderFilter').value;
-      const sortBy = document.getElementById('sortFilter').value;
-
-      let list = Object.values(groups);
-      if (gender !== 'all') list = list.filter(g => g.gender === gender);
-
-      if (sortBy === 'count') list.sort((a, b) => b.count - a.count);
-      else if (sortBy === 'median') list.sort((a, b) => (a.stats[50] ?? 9999) - (b.stats[50] ?? 9999));
-      else list.sort((a, b) => a.division.localeCompare(b.division));
-
-      document.getElementById('grid').innerHTML = list.map(renderCard).join('');
-    }
-
-    async function main() {
-      try {
-        document.getElementById('status').textContent = 'Loading results.json…';
-        const data = await fetchAll();
-        const groups = buildStats(data);
-
-        document.getElementById('status').textContent = `${data.length} results across ${Object.keys(groups).length} age groups.`;
-        document.getElementById('progress').style.width = '100%';
-        document.getElementById('filters').classList.remove('hidden');
-
-        renderGrid(groups);
-
-        document.getElementById('genderFilter').addEventListener('change', () => renderGrid(groups));
-        document.getElementById('sortFilter').addEventListener('change', () => renderGrid(groups));
-      } catch (err) {
-        document.getElementById('status').innerHTML = `<span class="error">Error: ${err.message}</span>`;
+    for (const g of Object.values(groups)) {
+      g.times.sort((a, b) => a - b);
+      g.count = g.times.length;
+      g.fastest = g.times[0] ?? null;
+      g.stats = {};
+      for (const p of PERCENTILES) {
+        // p-th runner percentile = (100-p)-th percentile of time values
+        g.stats[p] = percentile(g.times, 100 - p);
       }
     }
+    return groups;
+  }
 
-    main();
-  </script>
+  // ── rendering ─────────────────────────────────────────────────────────────
+
+  function renderCard(group, distanceKm) {
+    const displayOrder = [...PERCENTILES].reverse(); // 90 → 10
+    const rows = [
+      { label: 'Fastest', time: group.fastest, cls: 'row-fastest' },
+      ...displayOrder.map(p => ({
+        label: `${p}th percentile`,
+        time: group.stats[p],
+        cls: p === 50 ? 'row-median' : '',
+      })),
+    ];
+
+    const trs = rows.map(r => `
+      <tr class="${r.cls}">
+        <td class="label">${r.label}</td>
+        <td class="time">${formatTime(r.time)}</td>
+        <td class="pace">${r.time ? formatPace(r.time, distanceKm) : '—'}</td>
+      </tr>`).join('');
+
+    return `
+      <div class="card">
+        <div class="card-header">
+          <h2>${group.division}</h2>
+          <span class="count">${group.count} finishers</span>
+        </div>
+        <table>
+          <thead><tr><th>Percentile</th><th>Chip time</th><th>Pace</th></tr></thead>
+          <tbody>${trs}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function renderGrid(groups, distanceKm) {
+    const gender = document.getElementById('genderFilter').value;
+    const sortBy = document.getElementById('sortFilter').value;
+
+    let list = Object.values(groups);
+    if (gender !== 'all') {
+      const target = gender === 'Non-binary' ? 'NB' : gender === 'Male' ? 'M' : 'F';
+      list = list.filter(g => g.division.startsWith(target));
+    }
+
+    if (sortBy === 'count')  list.sort((a, b) => b.count - a.count);
+    else if (sortBy === 'median') list.sort((a, b) => (a.stats[50] ?? 9999) - (b.stats[50] ?? 9999));
+    else list.sort((a, b) => a.division.localeCompare(b.division));
+
+    document.getElementById('grid').innerHTML = list.map(g => renderCard(g, distanceKm)).join('');
+    document.getElementById('empty').style.display = list.length ? 'none' : 'block';
+  }
+
+  // ── event list ─────────────────────────────────────────────────────────────
+
+  let allEvents = [];
+  let currentGroups = null;
+  let currentEvent  = null;
+
+  async function loadEventList() {
+    const res = await fetch('/api/events');
+    allEvents = await res.json();
+    const sel = document.getElementById('eventSelect');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— select an event —</option>' +
+      allEvents.map(e => `<option value="${e.id}">${e.name} (${e.distanceKm}km)</option>`).join('');
+    if (cur && allEvents.find(e => e.id === cur)) sel.value = cur;
+  }
+
+  async function loadEvent(id) {
+    const event = allEvents.find(e => e.id === id);
+    if (!event) return;
+    currentEvent = event;
+
+    setStatus(`Loading ${event.name}…`);
+    document.getElementById('grid').innerHTML = '';
+    document.getElementById('filterBar').style.display = 'flex';
+    document.getElementById('deleteBtn').disabled = false;
+    document.getElementById('eventMeta').textContent =
+      `${event.distanceKm} km · ${event.totalResults} finishers · fetched ${new Date(event.fetchedAt).toLocaleDateString()}`;
+
+    const res  = await fetch(`/api/events/${id}/results`);
+    const data = await res.json();
+    currentGroups = buildStats(data);
+
+    setStatus(`${event.name} — ${data.length} results across ${Object.keys(currentGroups).length} age groups.`);
+    renderGrid(currentGroups, event.distanceKm);
+  }
+
+  // ── status ─────────────────────────────────────────────────────────────────
+
+  function setStatus(msg) {
+    document.getElementById('statusMsg').textContent = msg;
+  }
+
+  // ── modal ──────────────────────────────────────────────────────────────────
+
+  function openModal() {
+    document.getElementById('overlay').classList.add('open');
+    document.getElementById('fUrl').focus();
+  }
+  function closeModal() {
+    document.getElementById('overlay').classList.remove('open');
+    ['fUrl','fEventId','fSubEventId','fName','fDistance'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('modalError').textContent = '';
+    document.getElementById('submitBtn').disabled = false;
+  }
+
+  document.getElementById('addBtn').addEventListener('click', openModal);
+  document.getElementById('cancelBtn').addEventListener('click', closeModal);
+  document.getElementById('overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+  document.getElementById('submitBtn').addEventListener('click', async () => {
+    const url       = document.getElementById('fUrl').value.trim();
+    const eventId   = document.getElementById('fEventId').value.trim();
+    const subEventId = document.getElementById('fSubEventId').value.trim();
+    const name      = document.getElementById('fName').value.trim();
+    const distance  = document.getElementById('fDistance').value.trim();
+    const errEl     = document.getElementById('modalError');
+
+    if (!name)                         return errEl.textContent = 'Event name is required.';
+    if (!distance || Number(distance) <= 0) return errEl.textContent = 'Distance (km) is required.';
+    if (!url && !(eventId && subEventId)) return errEl.textContent = 'Provide a URL or both event IDs.';
+
+    errEl.textContent = '';
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Fetching…';
+    setStatus(`Fetching results for "${name}"… (this may take a few seconds)`);
+
+    try {
+      const body = url ? { url, name, distance: Number(distance) }
+                       : { eventId, subEventId, name, distance: Number(distance) };
+      const res  = await fetch('/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server error');
+
+      closeModal();
+      await loadEventList();
+      document.getElementById('eventSelect').value = data.id;
+      await loadEvent(data.id);
+    } catch (err) {
+      errEl.textContent = err.message;
+      btn.disabled = false;
+      btn.textContent = 'Fetch & Save';
+      setStatus('Error fetching event.');
+    }
+  });
+
+  // ── event select / delete ──────────────────────────────────────────────────
+
+  document.getElementById('eventSelect').addEventListener('change', e => {
+    const id = e.target.value;
+    if (id) loadEvent(id);
+    else {
+      document.getElementById('filterBar').style.display = 'none';
+      document.getElementById('deleteBtn').disabled = true;
+      document.getElementById('grid').innerHTML = '';
+      document.getElementById('empty').style.display = 'block';
+      setStatus('No event selected.');
+    }
+  });
+
+  document.getElementById('deleteBtn').addEventListener('click', async () => {
+    if (!currentEvent) return;
+    if (!confirm(`Delete "${currentEvent.name}"? The stored results will be removed.`)) return;
+    await fetch(`/api/events/${currentEvent.id}`, { method: 'DELETE' });
+    currentEvent  = null;
+    currentGroups = null;
+    document.getElementById('filterBar').style.display = 'none';
+    document.getElementById('deleteBtn').disabled = true;
+    document.getElementById('grid').innerHTML = '';
+    document.getElementById('empty').style.display = 'block';
+    setStatus('Event deleted.');
+    await loadEventList();
+  });
+
+  document.getElementById('genderFilter').addEventListener('change', () => {
+    if (currentGroups) renderGrid(currentGroups, currentEvent.distanceKm);
+  });
+  document.getElementById('sortFilter').addEventListener('change', () => {
+    if (currentGroups) renderGrid(currentGroups, currentEvent.distanceKm);
+  });
+
+  // ── init ───────────────────────────────────────────────────────────────────
+
+  (async () => {
+    await loadEventList();
+    document.getElementById('empty').style.display = 'block';
+    setStatus('Select an event or add a new one.');
+  })();
+</script>
 </body>
 </html>
