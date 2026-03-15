@@ -186,7 +186,8 @@
   function buildStats(results) {
     const groups = {};
     for (const r of results) {
-      const div = deriveDivision(r.genderSexId, r.age);
+      // Use pre-computed division if present (e.g. Athlinks data), otherwise derive from gender+age
+      const div = r.division || deriveDivision(r.genderSexId, r.age);
       if (!groups[div]) groups[div] = { division: div, gender: r.genderSexId, times: [] };
       const t = parseTime(r.chipTime);
       if (t != null) groups[div].times.push(t);
