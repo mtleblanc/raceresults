@@ -66,8 +66,6 @@
   <div class="grid" id="grid"></div>
 
   <script>
-    const BASE_URL = 'https://results.raceroster.com/v2/api/result-events/97210/sub-events/253764/results';
-    const LIMIT = 50;
     const PERCENTILES = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 
     function parseTime(str) {
@@ -105,39 +103,10 @@
       return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
     }
 
-    async function fetchPage(start) {
-      const url = `${BASE_URL}?filter_search=&start=${start}&limit=${LIMIT}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status} at start=${start}`);
-      return res.json();
-    }
-
     async function fetchAll() {
-      const first = await fetchPage(0);
-      const total = first.meta.filteredResults;
-      const allData = [...first.data];
-      updateProgress(allData.length, total);
-
-      const pages = [];
-      for (let start = LIMIT; start < total; start += LIMIT) {
-        pages.push(start);
-      }
-
-      // fetch remaining pages with modest concurrency
-      const CONCURRENCY = 4;
-      for (let i = 0; i < pages.length; i += CONCURRENCY) {
-        const batch = pages.slice(i, i + CONCURRENCY);
-        const results = await Promise.all(batch.map(fetchPage));
-        for (const r of results) allData.push(...r.data);
-        updateProgress(allData.length, total);
-      }
-
-      return allData;
-    }
-
-    function updateProgress(loaded, total) {
-      document.getElementById('status').textContent = `Loaded ${loaded} / ${total} results…`;
-      document.getElementById('progress').style.width = `${Math.round(loaded / total * 100)}%`;
+      const res = await fetch('results.json');
+      if (!res.ok) throw new Error(`Could not load results.json (HTTP ${res.status})`);
+      return res.json();
     }
 
     function buildStats(results) {
@@ -210,10 +179,11 @@
 
     async function main() {
       try {
+        document.getElementById('status').textContent = 'Loading results.json…';
         const data = await fetchAll();
         const groups = buildStats(data);
 
-        document.getElementById('status').textContent = `${data.length} results loaded across ${Object.keys(groups).length} age groups.`;
+        document.getElementById('status').textContent = `${data.length} results across ${Object.keys(groups).length} age groups.`;
         document.getElementById('progress').style.width = '100%';
         document.getElementById('filters').classList.remove('hidden');
 
