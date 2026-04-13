@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Fetches all raw results from an Athlinks-powered leaderboard API.
-// Usage: node fetch-athlinks.js <rid> <api-key>
+// Usage: node fetch-athlinks.js <rid> <api-key> [--offset=N]
 // Output: data/raw-athlinks-<rid>.json
 
 const https = require('https');
@@ -9,18 +9,23 @@ const path  = require('path');
 
 const RID     = process.argv[2];
 const API_KEY = process.argv[3];
-if (!RID || !API_KEY) {
-  console.error('Usage: node fetch-athlinks.js <rid> <api-key>');
+if (!RID ) {
+  console.error('Usage: node fetch-athlinks.js <rid> <api-key> [--offset=N]');
   console.error('  rid     — the "rid" query param from the leaderboard URL');
-  console.error('  api-key — the x-api-key header value from the browser request');
+  console.error('  --offset=N  — resume fetching from this offset (requires existing output file)');
   process.exit(1);
 }
+
+const OFFSET_ARG   = process.argv.find(a => a.startsWith('--offset='));
+const START_OFFSET = OFFSET_ARG ? parseInt(OFFSET_ARG.split('=')[1], 10) : 0;
 
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
-const BASE = 'https://5b8btxj9jd.execute-api.us-west-2.amazonaws.com/public/results/leaderboard';
-const LIMIT = 10;
+const outFile = path.join(DATA_DIR, `raw-athlinks-${RID}.json`);
+
+const BASE    = 'https://public.sportstats.one/getsortedresults';
+const LIMIT   = 10;
 const DELAY_MS = 1000; // pause between requests to avoid rate limiting
 
 const HEADERS = {
@@ -29,7 +34,6 @@ const HEADERS = {
   'origin': 'https://sportstats.one',
   'referer': 'https://sportstats.one/',
   'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36',
-  'x-api-key': API_KEY,
 };
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -47,41 +51,67 @@ function get(url) {
   });
 }
 
+async function getWithRetry(url) {
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await get(url);
+    } catch (e) {
+      if (attempt === MAX_ATTEMPTS) throw e;
+      console.log(` error (attempt ${attempt}/${MAX_ATTEMPTS}): ${e.message}. Retrying in 10s…`);
+      await sleep(10000);
+    }
+  }
+}
+
+function writeIncremental(out) {
+  fs.writeFileSync(outFile, JSON.stringify(out));
+}
+
 async function main() {
-  const url0 = `${BASE}?rid=${RID}&sort=overall&timeType=chip&limit=${LIMIT}&offset=0`;
-  process.stdout.write('Fetching page 1…');
-  await sleep(DELAY_MS);
-  const first = await get(url0);
+  let info, finishers, all;
 
-  if (!first.ok) throw new Error(`API returned ok=false: ${JSON.stringify(first).slice(0, 200)}`);
+  if (START_OFFSET > 0) {
+    if (!fs.existsSync(outFile)) {
+      console.error(`Cannot resume: ${outFile} does not exist`);
+      process.exit(1);
+    }
+    const existing = JSON.parse(fs.readFileSync(outFile, 'utf8'));
+    info      = existing.info;
+    finishers = existing.finishers;
+    all       = existing.participantData;
+    console.log(`Resuming from offset=${START_OFFSET}, have ${all.length} participants so far`);
+  } else {
+    const url0 = `${BASE}?rid=${RID}&sort=overall&timeType=chip&limit=${LIMIT}&offset=0`;
+    process.stdout.write('Fetching page 1…');
+    await sleep(DELAY_MS);
+    const first = await getWithRetry(url0);
+    if (!first.ok) throw new Error(`API returned ok=false: ${JSON.stringify(first).slice(0, 200)}`);
 
-  const total = first.info.total;
-  const all   = [...first.participantData];
-  console.log(` ${all.length}/${total}`);
+    info      = first.info;
+    finishers = first.finishers;
+    all       = [...first.participantData];
+    console.log(` ${all.length}/${info.total}`);
 
-  let offset = LIMIT;
+    writeIncremental({ rid: RID, fetchedAt: new Date().toISOString(), info, finishers, participantData: all });
+  }
+
+  const total = info.total;
+  let offset = START_OFFSET > 0 ? START_OFFSET : LIMIT;
+
   while (offset < total) {
     await sleep(DELAY_MS);
     const url = `${BASE}?rid=${RID}&sort=overall&timeType=chip&limit=${LIMIT}&offset=${offset}`;
     process.stdout.write(`Fetching offset=${offset}…`);
-    const page = await get(url);
+    const page = await getWithRetry(url);
     if (!page.ok) throw new Error(`API error at offset=${offset}: ${JSON.stringify(page)}`);
     all.push(...page.participantData);
     console.log(` ${all.length}/${total}`);
     offset += LIMIT;
+
+    writeIncremental({ rid: RID, fetchedAt: new Date().toISOString(), info, finishers, participantData: all });
   }
 
-  // Store raw data including top-level metadata (category summaries, etc.)
-  const out = {
-    rid: RID,
-    fetchedAt: new Date().toISOString(),
-    info: first.info,
-    finishers: first.finishers,
-    participantData: all,
-  };
-
-  const outFile = path.join(DATA_DIR, `raw-athlinks-${RID}.json`);
-  fs.writeFileSync(outFile, JSON.stringify(out));
   console.log(`\nWrote ${all.length} participants to ${outFile}`);
   console.log('Next: node process-athlinks.js <rid> "<Event Name>" <distanceKm>');
 }
