@@ -13,7 +13,7 @@
     "eventId": "athlinks-144989",
     "subEventId": "144989",
     "name": "TCS Toronto Waterfront Marathon 2025",
-    "distanceKm": 42.195,
+    "distanceKm": 42.2,
     "fetchedAt": "2026-03-15T23:01:55.357Z",
     "totalResults": 7159
   },
@@ -25,5 +25,14 @@
     "distanceKm": 21.1,
     "fetchedAt": "2026-04-13T02:31:00.123Z",
     "totalResults": 11178
+  },
+  {
+    "id": "athlinks-145797",
+    "eventId": "athlinks-145797",
+    "subEventId": "145797",
+    "name": "Sporting Life 10k 2026",
+    "distanceKm": 10,
+    "fetchedAt": "2026-05-10T20:43:10.998Z",
+    "totalResults": 21016
   }
 ]

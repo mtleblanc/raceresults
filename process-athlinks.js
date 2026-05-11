@@ -52,12 +52,26 @@ function msToTimeStr(ms) {
 const raw = JSON.parse(fs.readFileSync(rawFile, 'utf8'));
 const participants = raw.participantData;
 
+// Determine the finish checkpoint: the one with the highest opd (cumulative distance)
+let finishCid = null;
+let maxOpd = -1;
+for (const p of participants) {
+  if (!p.data) continue;
+  for (const [cid, split] of Object.entries(p.data)) {
+    const opd = split.pace?.opd;
+    if (opd != null && opd > maxOpd) { maxOpd = opd; finishCid = cid; }
+  }
+}
+
 let skipped = 0;
 const normalized = [];
 
 for (const p of participants) {
   // Skip DNS/DNF/DSQ — they have no valid chip time
   if (p.ps) { skipped++; continue; }
+
+  // Skip participants who didn't reach the finish checkpoint
+  if (String(p.latest?.cid) !== finishCid) { skipped++; continue; }
 
   const chipMs = p.latest?.cd;
   if (!chipMs || chipMs <= 0) { skipped++; continue; }
